@@ -7,15 +7,20 @@ export async function handleRequest(request) {
   const pathname = url.pathname;
   const search = url.search;
 
+  if (request.method === "OPTIONS") {
+    return handleOPTIONS();
+  }
+
   if (pathname === '/' || pathname === '/index.html') {
-    return new Response('Proxy is Running!  More Details: https://github.com/tech-shrimp/gemini-balance-lite', {
+    return new Response('Proxy is Running!  More Details: https://github.com/tech-shrimp/gemini-balance-lite', fixCors({
       status: 200,
       headers: { 'Content-Type': 'text/html' }
-    });
+    }));
   }
 
   if (pathname === '/verify' && request.method === 'POST') {
-    return handleVerification(request);
+    const resp = await handleVerification(request);
+    return new Response(resp.body, fixCors(resp));
   }
 
   // 处理OpenAI格式请求
@@ -36,15 +41,14 @@ export async function handleRequest(request) {
           headers.set('x-goog-api-key', selectedKey);
         }
       } else {
-        if (key.trim().toLowerCase()==='content-type')
-        {
-           headers.set(key, value);
+        if (key.trim().toLowerCase() === 'content-type') {
+          headers.set(key, value);
         }
       }
     }
 
     console.log('Request Sending to Gemini')
-    console.log('targetUrl:'+targetUrl)
+    console.log('targetUrl:' + targetUrl)
     console.log(headers)
 
     const response = await fetch(targetUrl, {
@@ -67,16 +71,32 @@ export async function handleRequest(request) {
     responseHeaders.delete('content-encoding');
     responseHeaders.set('Referrer-Policy', 'no-referrer');
 
-    return new Response(response.body, {
+    return new Response(response.body, fixCors({
       status: response.status,
       headers: responseHeaders
-    });
+    }));
 
   } catch (error) {
-   console.error('Failed to fetch:', error);
-   return new Response('Internal Server Error\n' + error?.stack, {
-    status: 500,
-    headers: { 'Content-Type': 'text/plain' }
-   });
-}
+    console.error('Failed to fetch:', error);
+    return new Response('Internal Server Error\n' + error?.stack, fixCors({
+      status: 500,
+      headers: { 'Content-Type': 'text/plain' }
+    }));
+  }
+};
+
+const fixCors = ({ headers, status, statusText }) => {
+  headers = new Headers(headers);
+  headers.set("Access-Control-Allow-Origin", "*");
+  return { headers, status, statusText };
+};
+
+const handleOPTIONS = async () => {
+  return new Response(null, {
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "*",
+      "Access-Control-Allow-Headers": "*",
+    }
+  });
 };
